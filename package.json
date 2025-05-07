@@ -1,0 +1,41 @@
+```json
+{
+  "name": "malengoall_bot",
+  "version": "1.1.0",
+  "description": "WhatsApp bot for quick replies, group automation, and contact (VCF) handling using Baileys",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [
+    "WhatsApp",
+    "bot",
+    "Baileys",
+    "group-management",
+    "VCF",
+    "quick-reply",
+    "automation"
+  ],
+  "author": "Malengoall",
+  "license": "MIT",
+  "dependencies": {
+    "@adiwajshing/baileys": "^6.5.0",
+    "qrcode-terminal": "^0.12.0",
+    "fs-extra": "^11.1.1"
+  },
+  "config": {
+    "adminNumber": "0613086900",
+    "language": "sw",
+    "features": {
+      "quickReply": true,
+      "groupManagement": true,
+      "vcfExport": true
+    }
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
+```￼Enter
