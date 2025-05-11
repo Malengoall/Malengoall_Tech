@@ -1,4 +1,4 @@
-```json
+json
 {
   "name": "malengoall_bot",
   "version": "1.1.0",
@@ -32,4 +32,4 @@
     "node": ">=16"
   }
 }
-```
+
