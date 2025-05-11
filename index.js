@@ -1,4 +1,4 @@
-json
+js
 {
   "name": "malengoall_bot",
   "version": "1.1.0",
