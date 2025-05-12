@@ -1,12 +1,22 @@
-json
+
 {
-  "name": "malengoall_bot",
+  "name": "malengoall-bot",
   "version": "1.0.0",
+  "description": "A smart and modern bot created by Malengoall",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
+  "keywords": ["bot", "malengoall", "nodejs", "modern"],
+  "author": "Malengoall",
+  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2"
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }
