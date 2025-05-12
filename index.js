@@ -19,4 +19,4 @@ app.listen(port, () =>
   setTimeout(() => 
     console.log(`✅{botName} is now running! Ready for action.`);
   }, 1000);
-});
+}
