@@ -1,12 +1,30 @@
-js
-const express = require('express');
-const app = express();
-const port = process.env.PORT || 3000;
+ js
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
 
-app.get('/', (req, res) => {
-  res.send('Malengoall bot is running!');
+// Read user input from terminal
+import readline from 'readline';
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Print greeting
+const botName = process.env.BOT_NAME || "Malengoall Bot";
+console.log(`🤖 botName is ready. Type something below:`);
+
+// Listen to user input
+rl.on('line', (input) => 
+  const lower = input.toLowerCase();
+
+  if (lower === 'hello') 
+    console.log("👋 Hello there! I'm Malengoall Bot.");
+   else if (lower === 'bye') 
+    console.log("👋 Goodbye!");
+    rl.close();
+   else 
+    console.log(`🤔 I don't understand: "{input}"`);
+  }
 });
