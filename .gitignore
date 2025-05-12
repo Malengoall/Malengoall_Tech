@@ -1,19 +1,18 @@
-```gitignore
-Node modules
+gitignore
+Ignore node_modules folder
 node_modules/
 
-.env file containing sensitive data
+Ignore .env file containing sensitive data
 .env
 
-Any JSON file that contains sensitive info
-auth.json
-
-npm logs
+Ignore npm logs
 npm-debug.log
 yarn-debug.log
 yarn-error.log
 
-Operating system files (macOS, Windows, etc.)
+Ignore OS-specific files
 .DS_Store
 Thumbs.db
-```
+
+Ignore auth.json or other sensitive JSON files
+auth.json
