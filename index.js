@@ -1,30 +1,15 @@
- js
+js
 // Load environment variables
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Read user input from terminal
-import readline from 'readline';
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-// Print greeting
+// Start bot logic
 const botName = process.env.BOT_NAME || "Malengoall Bot";
-console.log(`🤖 botName is ready. Type something below:`);
+const port = process.env.PORT || 3000;
 
-// Listen to user input
-rl.on('line', (input) => 
-  const lower = input.toLowerCase();
+console.log(`🤖 botName is starting on port{port}...`);
 
-  if (lower === 'hello') 
-    console.log("👋 Hello there! I'm Malengoall Bot.");
-   else if (lower === 'bye') 
-    console.log("👋 Goodbye!");
-    rl.close();
-   else 
-    console.log(`🤔 I don't understand: "{input}"`);
-  }
-});
+// Simulate bot running
+setTimeout(() => {
+  console.log(`✅ ${botName} is now running! Ready to receive commands.`);
+}, 1000);
