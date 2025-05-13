@@ -1,14 +1,13 @@
-// Load environment variables
+import express from import express from import express from 'express'import express from 'express';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Start bot logic
-const botName = process.env.BOT_NAME || "Malengoall Bot";
+const app = express();
 const port = process.env.PORT || 3000;
 
-console.log(`🤖 botName is starting on port{port}...`);
+app.get('/', (req, res) => {
+  res.send('Malengoall_Bot is live!');
+});
 
-// Simulate bot running
-setTimeout(() => {
-  console.log(`✅ ${botName} is now running! Ready for action!`);
-}, 1000);
+app.listen(port, () => {
+  console.log(`✅ Server running on port ${port}`  console.log(`✅ Server running on port ${port}`);
