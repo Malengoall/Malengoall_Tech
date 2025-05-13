@@ -12,11 +12,11 @@ const app = express();
 
 app.get('/', (req, res) => {
   res.send(`botName is running successfully! 🎉`);
-);
+
 
 app.listen(port, () => 
   console.log(`🤖{botName} is starting on port port...`);
   setTimeout(() => 
-    console.log(`✅{botName} is now running! Ready to receive commands.`);
+    console.log(`✅{botName} is now running! Ready to receive commands.
   }, 1000);
-});
+}
