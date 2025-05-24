@@ -1,19 +1,27 @@
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
+const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys'const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
+const { Boom } = require('@hapi/boom')
+const { join } = require('path')
 
-dotenv.config();
+const { state, saveState } = useSingleFileAuthState('./auth.json')
 
-const app = express();
-const port = process.env.PORT || 3000;
+async function startSock() {
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true
+    })
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+    sock.ev.on('creds.update', saveState)
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update
+        if(connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+            console.log('connection closed due to ', lastDisconnect.error, ', reconnecting', shouldReconnect)
+            if(shouldReconnect) startSock()
+        } else if(connection === 'open') {
+            console.log('✅ Bot connected!')
+        }
+    })
+}
 
-app.listen(port, () => {
-  console.log(`✅ Server running on port ${port}`);
-});
+startSock()
