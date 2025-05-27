@@ -1,9 +1,9 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const fs = require('fs');
-const ytdl = require('ytdl-core');
-const axios = require('axios');
-const { exec } = require('child_process');
+const { Client, LocalAuth, MessageMedia } = import('whatsapp-web.js');
+const qrcode = import('qrcode-terminal');
+const fs = import('fs');
+const ytdl = import('ytdl-core');
+const axios = import('axios');
+const { exec } = import('child_process');
 
 // Tengeneza WhatsApp client
 const client = new Client({
