@@ -1,5 +1,8 @@
-import pkg from '@whiskeysockets/baileys';
-const { makeWASocket, useSingleFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = pkg;
+import makeWASocket, {
+  useSingleFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason
+} from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import fs from 'fs';
