@@ -1,108 +1,100 @@
-const { Client, LocalAuth, MessageMedia } = import('whatsapp-web.js');
-const qrcode = import('qrcode-terminal');
-const fs = import('fs');
-const ytdl = import('ytdl-core');
-const axios = import('axios');
-const { exec } = import('child_process');
+import makeWASocket, { useSingleFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import qrcode from 'qrcode-terminal';
+import fs from 'fs';
+import ytdl from 'ytdl-core';
+import ffmpeg from 'fluent-ffmpeg';
+import fetch from 'node-fetch';
+import path from 'path';
 
-// Tengeneza WhatsApp client
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+const { state, saveState } = useSingleFileAuthState('./auth_info.json');
+
+const startBot = async () => {
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    version,
+    printQRInTerminal: true,
+    auth: state,
+  });
+
+  sock.ev.on('creds.update', saveState);
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+      const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Connection closed. Reconnecting:', shouldReconnect);
+      if (shouldReconnect) startBot();
+    } else if (connection === 'open') {
+      console.log('Bot connected successfully!');
     }
-});
+  });
 
-// QR Code itaonekana kwenye Terminal (Termux)
-client.on('qr', (qr) => {
-    console.log('Scan QR Code Below:');
-    qrcode.generate(qr, { small: true });
-});
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-// Bot iko tayari
-client.on('ready', () => {
-    console.log('BOT is ready on WhatsApp!');
-});
+    const from = msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-// Message handler
-client.on('message', async message => {
-    const msg = message.body.toLowerCase();
+    if (!text) return;
 
-    if (msg === 'hi' || msg === 'hello') {
-        return message.reply('Hello! I am your bot. Type *menu* to see options.');
-    }
+    console.log("Received:", text);
 
-    if (msg === 'menu') {
-        return message.reply(`*BOT COMMANDS:*
-1. play [YouTube link] - Download audio
-2. video [YouTube link] - Download video
-3. info - View your contact info
-4. sticker - Reply to an image to get sticker
-5. ping - Test bot speed
-6. help - Show this menu`);
-    }
+    if (text.startsWith('!audio ')) {
+      const query = text.slice(7).trim();
+      await sock.sendMessage(from, { text: `Tafadhali subiri, napakua audio ya: ${query}` });
 
-    if (msg === 'info') {
-        const contact = await message.getContact();
-        return message.reply(`*Your Info:*
-Name: ${contact.pushname}
-Number: ${contact.number}
-ID: ${contact.id.user}`);
-    }
-
-    if (msg === 'help') {
-        return message.reply('Type *menu* to see all commands.');
-    }
-
-    if (msg === 'ping') {
-        const start = Date.now();
-        const reply = await message.reply('Pinging...');
-        const end = Date.now();
-        return reply.reply(`Pong! Speed: ${end - start}ms`);
-    }
-
-    if (msg === 'sticker' && message.hasMedia) {
-        const media = await message.downloadMedia();
-        return client.sendMessage(message.from, media, {
-            sendMediaAsSticker: true
-        });
+      try {
+        const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${query}`);
+        const output = `./tmp/${query}.mp3`;
+        ytdl(`https://www.youtube.com/watch?v=${query}`, { filter: 'audioonly' })
+          .pipe(ffmpeg().audioCodec('libmp3lame').save(output))
+          .on('end', async () => {
+            const audio = fs.readFileSync(output);
+            await sock.sendMessage(from, {
+              audio: audio,
+              mimetype: 'audio/mp4'
+            });
+            fs.unlinkSync(output);
+          });
+      } catch (err) {
+        await sock.sendMessage(from, { text: `Hitilafu katika kupakua audio: ${err.message}` });
+      }
     }
 
-    if (msg.startsWith('play ')) {
-        const url = msg.split(' ')[1];
-        if (!ytdl.validateURL(url)) {
-            return message.reply('Invalid YouTube link.');
-        }
+    else if (text.startsWith('!video ')) {
+      const query = text.slice(7).trim();
+      await sock.sendMessage(from, { text: `Napakua video ya: ${query}` });
 
-        message.reply('Downloading audio...');
-        const path = './audio.mp3';
-        const stream = ytdl(url, { filter: 'audioonly' });
-
-        stream.pipe(fs.createWriteStream(path)).on('finish', async () => {
-            const media = MessageMedia.fromFilePath(path);
-            await client.sendMessage(message.from, media);
-            fs.unlinkSync(path);
-        });
+      try {
+        const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${query}`);
+        const output = `./tmp/${query}.mp4`;
+        ytdl(`https://www.youtube.com/watch?v=${query}`, { quality: 'lowestvideo' })
+          .pipe(fs.createWriteStream(output))
+          .on('finish', async () => {
+            const video = fs.readFileSync(output);
+            await sock.sendMessage(from, {
+              video: video,
+              mimetype: 'video/mp4'
+            });
+            fs.unlinkSync(output);
+          });
+      } catch (err) {
+        await sock.sendMessage(from, { text: `Tatizo kwenye video: ${err.message}` });
+      }
     }
 
-    if (msg.startsWith('video ')) {
-        const url = msg.split(' ')[1];
-        if (!ytdl.validateURL(url)) {
-            return message.reply('Invalid YouTube link.');
-        }
-
-        message.reply('Downloading video...');
-        const path = './video.mp4';
-        const stream = ytdl(url, { quality: '18' });
-
-        stream.pipe(fs.createWriteStream(path)).on('finish', async () => {
-            const media = MessageMedia.fromFilePath(path);
-            await client.sendMessage(message.from, media);
-            fs.unlinkSync(path);
-        });
+    else if (text === '!menu') {
+      await sock.sendMessage(from, {
+        text: `*Menu ya Bot:*
+1. !audio [YouTube Video ID] - Pakua audio
+2. !video [YouTube Video ID] - Pakua video
+3. !menu - Onyesha menyu hii tena`
+      });
     }
-});
+  });
+};
 
-// Anzisha BOT
-client.initialize();
+startBot();
