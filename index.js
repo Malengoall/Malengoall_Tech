@@ -1,66 +1,103 @@
-import makeWASocket, {
-  DisconnectReason,
-  useSingleFileAuthState,
-  fetchLatestBaileysVersion
-} from '@whiskeysockets/baileys';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
-import ffmpeg from 'fluent-ffmpeg';
-import fetch from 'node-fetch';
+import figlet from 'figlet';
+import chalk from 'chalk';
+import axios from 'axios';
 import fs from 'fs';
 
-const { state, saveState } = useSingleFileAuthState('./auth_info.json');
+// Banner
+console.clear();
+console.log(chalk.green(figlet.textSync('Malengoall Bot')));
 
-const startSock = async () => {
-  const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    printQRInTerminal: true,
-    auth: state
-  });
-
-  sock.ev.on('creds.update', saveState);
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) startSock();
-    } else if (connection === 'open') {
-console.log('✅ Connected to WhatsApp!');
+// WhatsApp Client
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox']
     }
-  });
+});
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (!messages[0].message) return;
-    const msg = messages[0];
-    const from = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+// QR Code
+client.on('qr', qr => {
+    console.log(chalk.yellow('[*] Scan QR Code with your WhatsApp:'));
+    qrcode.generate(qr, { small: true });
+});
 
-    if (text?.toLowerCase() === 'hi' || text?.toLowerCase() === 'hello') {
-      await sock.sendMessage(from, { text: 'Hello! How can I help you today?' });
+// Ready
+client.on('ready', () => {
+    console.log(chalk.green('[✓] Bot is online!'));
+});
+
+// Message Handling
+client.on('message', async msg => {
+    const message = msg.body.toLowerCase();
+
+    // Typing status
+    client.sendPresenceAvailable();
+    msg.react('🤖');
+
+    if (message === 'hi' || message === 'hello') {
+        msg.reply('👋 Hujambo! Karibu kwa Malengoall Bot.');
     }
 
-    if (text?.toLowerCase() === 'audio') {
-      ffmpeg('media/sample.mp3')
-        .audioCodec('libmp3lame')
-        .save('media/output.mp3')
-        .on('end', async () => {
-          await sock.sendMessage(from, {
-            audio: fs.readFileSync('media/output.mp3'),
-            mimetype: 'audio/mp4'
-          });
+    // Play audio (must be in local folder)
+    if (message === '!audio') {
+        const media = MessageMedia.fromFilePath('./media/sample.mp3');
+        await msg.reply(media);
+    }
+
+    // Play video
+    if (message === '!video') {
+        const media = MessageMedia.fromFilePath('./media/sample.mp4');
+        await msg.reply(media);
+    }
+
+    // AI Chatbot (basic example using dummy AI response)
+    if (message.startsWith('!ask ')) {
+        const prompt = message.replace('!ask ', '');
+        const aiReply = await getAIResponse(prompt);
+        msg.reply(aiReply);
+    }
+
+    // View status
+    if (message === '!status') {
+        msg.reply('✅ Status view feature coming soon...');
+    }
+
+    // Reaction
+    if (message === '!like') {
+        msg.react('❤️');
+    }
+
+    // Typing and recording
+    if (message === '!typing') {
+        client.sendPresenceAvailable();
+        msg.reply('📝 Niko naandika...');
+    }
+
+    if (message === '!recording') {
+        client.sendPresenceRecording();
+        msg.reply('🎙️ Niko narekodi...');
+    }
+});
+
+// AI Response
+async function getAIResponse(prompt) {
+    try {
+        // Replace with your AI service URL or key
+        const res = await axios.post('https://api.chatanywhere.tech/v1/chat/completions', {
+            model: "gpt-3.5-turbo",
+            messages: [{ role: "user", content: prompt }]
+        }, {
+            headers: { "Content-Type": "application/json" }
         });
+        return res.data.choices[0].message.content.trim();
+    } catch (err) {
+        console.error('AI Error:', err);
+        return "Samahani, siwezi kujibu kwa sasa.";
     }
+}
 
-    if (text?.toLowerCase() === 'video') {
-      await sock.sendMessage(from, {
-        video: fs.readFileSync('media/sample.mp4'),
-        caption: 'Here is your video!'
-      });
-    }
-  });
-};
-
-startSock();
+// Start client
+client.initialize();
