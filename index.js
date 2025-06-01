@@ -1,103 +1,142 @@
-import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
-import qrcode from 'qrcode-terminal';
-import figlet from 'figlet';
-import chalk from 'chalk';
-import axios from 'axios';
-import fs from 'fs';
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason, makeInMemoryStore } = require('@whiskeysockets/baileys')
+const chalk = require('chalk');
+const figlet = require('figlet');
+const ora = require('ora');
+const fs = require('fs-extra');
+const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const { exec } = require('child_process');
+const moment = require('moment');
+const mime = require('mime-types');
 
-// Banner
-console.clear();
-console.log(chalk.green(figlet.textSync('Malengoall Bot')));
+const spinner = ora("Starting Malengoall Bot...").start();
 
-// WhatsApp Client
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox']
-    }
-});
+// Create a memory store
+const store = makeInMemoryStore({ logger: console });
 
-// QR Code
-client.on('qr', qr => {
-    console.log(chalk.yellow('[*] Scan QR Code with your WhatsApp:'));
-    qrcode.generate(qr, { small: true });
-});
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./session');
+    const { version } = await fetchLatestBaileysVersion();
 
-// Ready
-client.on('ready', () => {
-    console.log(chalk.green('[✓] Bot is online!'));
-});
+    const sock = makeWASocket({
+        version,
+        printQRInTerminal: true,
+        auth: state,
+        defaultQueryTimeoutMs: undefined,
+        logger: console,
+        generateHighQualityLinkPreview: true,
+        patchMessageBeforeSending: (message) => {
+            const requiresPatch = !!(
+                message.buttonsMessage ||
+                message.templateMessage ||
+                message.listMessage
+            );
+            return requiresPatch ? { viewOnceMessage: { message: { messageContextInfo: {}, ...message } } } : message;
+        }
+    });
 
-// Message Handling
-client.on('message', async msg => {
-    const message = msg.body.toLowerCase();
+    store.bind(sock.ev);
 
-    // Typing status
-    client.sendPresenceAvailable();
-    msg.react('🤖');
+    console.log(chalk.green(figlet.textSync("Malengoall Bot", { horizontalLayout: "full" })));
+    console.log(chalk.cyan(`📅 Started on: ${moment().format('YYYY-MM-DD HH:mm:ss')}`));
+    spinner.succeed("Bot is Live!");
 
-    if (message === 'hi' || message === 'hello') {
-        msg.reply('👋 Hujambo! Karibu kwa Malengoall Bot.');
-    }
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key && msg.key.remoteJid === 'status@broadcast') return;
 
-    // Play audio (must be in local folder)
-    if (message === '!audio') {
-        const media = MessageMedia.fromFilePath('./media/sample.mp3');
-        await msg.reply(media);
-    }
+        const from = msg.key.remoteJid;
+        const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        const isCmd = body.startsWith('.');
+        const command = isCmd ? body.split(' ')[0].slice(1).toLowerCase() : null;
+        const args = body.split(' ').slice(1);
 
-    // Play video
-    if (message === '!video') {
-        const media = MessageMedia.fromFilePath('./media/sample.mp4');
-        await msg.reply(media);
-    }
+        console.log(chalk.yellow(`[MSG] From: ${from}, CMD: ${command}`));
 
-    // AI Chatbot (basic example using dummy AI response)
-    if (message.startsWith('!ask ')) {
-        const prompt = message.replace('!ask ', '');
-        const aiReply = await getAIResponse(prompt);
-        msg.reply(aiReply);
-    }
+        // Reactions (👍❤️😂🔥)
+        await sock.sendMessage(from, { react: { text: '👍', key: msg.key } });
 
-    // View status
-    if (message === '!status') {
-        msg.reply('✅ Status view feature coming soon...');
-    }
+        // Typing simulation
+        await sock.sendPresenceUpdate('composing', from);
+        await new Promise(r => setTimeout(r, 1500));
+        await sock.sendPresenceUpdate('paused', from);
 
-    // Reaction
-    if (message === '!like') {
-        msg.react('❤️');
-    }
+        // COMMANDS
+        if (isCmd) {
+            switch (command) {
+                case 'ping':
+                    await sock.sendMessage(from, { text: 'Pong 🏓' });
+                    break;
 
-    // Typing and recording
-    if (message === '!typing') {
-        client.sendPresenceAvailable();
-        msg.reply('📝 Niko naandika...');
-    }
+                case 'video':
+                    const videoBuffer = fs.readFileSync('./media/sample.mp4');
+                    await sock.sendMessage(from, { video: videoBuffer, caption: "Here's your video 📹" });
+                    break;
 
-    if (message === '!recording') {
-        client.sendPresenceRecording();
-        msg.reply('🎙️ Niko narekodi...');
-    }
-});
+                case 'audio':
+                    const audioBuffer = fs.readFileSync('./media/sample.mp3');
+                    await sock.sendMessage(from, { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true });
+                    break;
 
-// AI Response
-async function getAIResponse(prompt) {
-    try {
-        // Replace with your AI service URL or key
-        const res = await axios.post('https://api.chatanywhere.tech/v1/chat/completions', {
-            model: "gpt-3.5-turbo",
-            messages: [{ role: "user", content: prompt }]
-        }, {
-            headers: { "Content-Type": "application/json" }
-        });
-        return res.data.choices[0].message.content.trim();
-    } catch (err) {
-        console.error('AI Error:', err);
-        return "Samahani, siwezi kujibu kwa sasa.";
-    }
+                case 'ai':
+                    const query = args.join(" ");
+                    if (!query) return sock.sendMessage(from, { text: 'Please provide a prompt e.g., `.ai Who are you?`' });
+
+                    const response = await axios.post("https://api.openai.com/v1/chat/completions", {
+                        model: "gpt-3.5-turbo",
+                        messages: [{ role: "user", content: query }]
+                    }, {
+                        headers: {
+                            "Authorization": `Bearer YOUR_OPENAI_API_KEY`,
+                            "Content-Type": "application/json"
+                        }
+                    });
+
+                    const aiText = response.data.choices[0].message.content;
+                    await sock.sendMessage(from, { text: aiText });
+                    break;
+
+                case 'status':
+                    const statusList = await sock.fetchStatus(from);
+                    await sock.sendMessage(from, { text: `Your status: ${JSON.stringify(statusList)}` });
+                    break;
+
+                case 'menu':
+                    await sock.sendMessage(from, {
+                        text: `🔘 *Malengoall Bot Menu*\n
+• .ping – Check bot status
+• .video – Send sample video
+• .audio – Send sample audio
+• .ai <question> – Ask AI
+• .status – View your WhatsApp status
+• .menu – Show this menu
+                    `
+                    });
+                    break;
+
+                default:
+                    await sock.sendMessage(from, { text: `❌ Unknown command: *${command}*.\nType *.menu* to view available commands.` });
+            }
+        }
+    });
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
+            console.log(chalk.red(`❌ Disconnected: ${lastDisconnect.error}`));
+            if (shouldReconnect) {
+                console.log(chalk.blue('🔁 Reconnecting...'));
+                startBot();
+            } else {
+                console.log(chalk.redBright('Logged out. Delete session and scan again.'));
+            }
+        } else if (connection === 'open') {
+            console.log(chalk.greenBright('✅ Connected to WhatsApp Web!'));
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
 }
 
-// Start client
-client.initialize();
+startBot();
