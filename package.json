@@ -1,46 +1,32 @@
 {
-  "name": "malengoall-bot",
-  "version": "3.0.0",
-  "description": "An advanced WhatsApp bot with audio/video support, reactions, AI chatbot, and full modern command set",
+  "name": "malengoall-whatsapp-bot",
+  "version": "2.0.0",
+  "description": "A modern WhatsApp bot using Baileys with full automation & group control features.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "echo 'Building Malengoall Bot...'",
-    "deploy": "git push render main"
+    "qr": "node index.js",
+    "clean": "rm -rf session",
+    "update": "npm update",
+    "install:all": "npm install",
+    "reset": "npm cache clean --force && rm -rf node_modules && npm install"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "malengoall",
-    "whatsapp-bot",
-    "ai",
-    "audio",
-    "video",
-    "qr",
-    "termux",
-    "reaction",
-    "chatbot"
-  ],
-  "author": "Malengoall Dev Team",
+  "author": "Malengoall",
   "license": "MIT",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.6.0",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "pino": "^8.0.0",
+    "figlet": "^1.5.2",
     "chalk": "^5.3.0",
-    "figlet": "^1.6.0",
-    "ora": "^7.1.0",
+    "ora": "^6.1.2",
     "qrcode-terminal": "^0.12.0",
-    "moment": "^2.29.4",
-    "axios": "^1.6.8",
-    "mime-types": "^2.1.35",
-    "node-fetch": "^3.3.2",
-    "fs-extra": "^11.2.0",
-    "openai": "^4.20.0"
+    "moment": "^2.29.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "nodemon": "^3.0.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=16.0.0"
   }
 }
