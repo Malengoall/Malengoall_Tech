@@ -1,94 +1,133 @@
-const {
-    default: makeWASocket,
-    useSingleFileAuthState,
-    fetchLatestBaileysVersion,
-    makeInMemoryStore,
-    DisconnectReason
-} = require('@whiskeysockets/baileys');
+import makeWASocket, {
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  useMultiFileAuthState,
+  makeInMemoryStore
+} from "@whiskeysockets/baileys";
+import chalk from "chalk";
+import { Boom } from "@hapi/boom";
+import figlet from "figlet";
+import ora from "ora";
+import fs from "fs-extra";
+import path from "path";
+import qrcode from "qrcode-terminal";
+import moment from "moment";
 
-const qrcode = require('qrcode-terminal');
-const chalk = require('chalk');
-const figlet = require('figlet');
-const { Boom } = require('@hapi/boom');
-const fs = require('fs');
+// Directories
+const authDir = "./auth_info";
+fs.ensureDirSync(authDir);
 
-// Auth file setup
-const { state, saveState } = useSingleFileAuthState('./auth_info.json');
-const store = makeInMemoryStore({ logger: undefined });
-store.readFromFile('./baileys_store.json');
-setInterval(() => {
-    store.writeToFile('./baileys_store.json');
-}, 10000);
+// Fancy welcome banner
+console.log(
+  chalk.cyan(
+    figlet.textSync("Malengoall Bot", {
+      font: "Standard",
+      horizontalLayout: "default",
+      verticalLayout: "default"
+    })
+  )
+);
 
-// Banner
-console.log(chalk.cyan(figlet.textSync("Malengoall Bot", { font: "Slant" })));
+// Initialize bot
+const startBot = async () => {
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
+  const { version, isLatest } = await fetchLatestBaileysVersion();
+  const spinner = ora("Connecting to WhatsApp...").start();
 
-async function startBot() {
-    const { version } = await fetchLatestBaileysVersion();
-    const sock = makeWASocket({
-        version,
-        printQRInTerminal: true,
-        auth: state,
-        logger: undefined,
-        generateHighQualityLinkPreview: true
-    });
+  const sock = makeWASocket({
+    version,
+    printQRInTerminal: true,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, fs)
+    },
+    logger: {
+      info: () => {},
+      debug: () => {},
+      warn: () => {},
+      error: () => {}
+    },
+    browser: ['MalengoallBot', 'Safari', '1.0.0']
+  });
 
-    store.bind(sock.ev);
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
-    // Connection updates
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) {
-            qrcode.generate(qr, { small: true });
-        }
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error = Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(chalk.red('❌ Connection closed. Reconnecting...'), shouldReconnect);
-            if (shouldReconnect) startBot();
-        } else if (connection === 'open') {
-            console.log(chalk.green('✅ Bot Connected Successfully!'));
-        }
-    });
+    if (qr) {
+      qrcode.generate(qr, { small: true });
+    }
 
-    // Listen to messages
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+    if (connection === 'open') {
+      spinner.succeed(chalk.green('✅ Bot connected successfully!'));
+    }
 
-        const sender = msg.key.remoteJid;
-        const content = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    if (connection === 'close') {
+      const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
+      if (reason === DisconnectReason.loggedOut) {
+        console.log(chalk.red('🔴 Bot logged out. Re-authenticating...'));
+        fs.rmSync(authDir, { recursive: true, force: true });
+        startBot();
+      } else {
+        console.log(chalk.yellow('Reconnecting...'));
+        startBot();
+      }
+    }
+  });
 
-        // Command prefix
-        if (content.startsWith('.')) {
-            const command = content.trim().split(' ')[0].slice(1).toLowerCase();
-            const args = content.trim().split(' ').slice(1);
+  sock.ev.on('creds.update', saveCreds);
 
-            // Auto-typing simulation
-            await sock.sendPresenceUpdate('composing', sender);
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-            switch (command) {
-                case 'menu':
-                    await sock.sendMessage(sender, { text: `🧠 *Malengoall Bot Menu*\n\n.menu - Show this menu\n.ping - Bot speed\n.say <msg> - Bot repeats\n.owner - Info` });
-                    break;
-                case 'ping':
-                    await sock.sendMessage(sender, { text: `🏓 Ping OK!` });
-                    break;
-                case 'say':
-                    if (!args.length) return await sock.sendMessage(sender, { text: '❌ Usage: .say <text>' });
-                    await sock.sendMessage(sender, { text: args.join(' ') });
-                    break;
-                case 'owner':
-                    await sock.sendMessage(sender, { text: `🤖 Bot by Malengoall.\nGitHub: https://github.com/malengoall` });
-                    break;
-                default:
-                    await sock.sendMessage(sender, { text: '❌ Unknown command.' });
-                    break;
-            }
-        }
-    });
+    const sender = msg.key.remoteJid;
+    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
 
-    // Save auth state
-    sock.ev.on('creds.update', saveState);
-}
+    console.log(`[${moment().format("HH:mm:ss")}] ${sender}: ${text}`);
+
+    // Long and numerous commands
+    if (text.toLowerCase() === "!help" || text.toLowerCase() === "help me please with all the commands you can offer") {
+      await sock.sendMessage(sender, {
+        text: `
+📜 *Malengoall Bot Command List:*
+
+1️⃣ !hello - Greet the bot
+2️⃣ !joke - Random nerdy joke
+3️⃣ !quote - Inspirational quote to change your day
+4️⃣ !time - Get current server time
+5️⃣ !menu - Display extended feature list
+6️⃣ !support - Contact dev team
+7️⃣ !funny - Get a funny meme (if enabled)
+8️⃣ !info - Get WhatsApp user info
+9️⃣ !groupinfo - Details about the group
+🔟 !ai What is the meaning of life? - Ask the AI anything!
+
+🔁 And many more incoming...
+
+Type *!menu* for extended categories like:
+• Media & Downloader
+• Entertainment & Games
+• Utilities & Tools
+• Admin & AutoModeration
+• Reactions, Replies, Status-viewer
+
+Enjoy your time with the mighty Malengoall Bot! 🤖
+        `.trim()
+      });
+    }
+
+    if (text.toLowerCase() === "!hello") {
+      await sock.sendMessage(sender, { text: "👋 Hello! I'm Malengoall, your friendly WhatsApp bot." });
+    }
+
+    if (text.toLowerCase() === "!time") {
+      await sock.sendMessage(sender, { text: `🕒 Server time: ${moment().format('LLLL')}` });
+    }
+
+    // Add as many commands as you want here...
+  });
+};
 
 startBot();
